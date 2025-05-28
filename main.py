@@ -1,5 +1,6 @@
 import logging
 import requests
+import os
 from telegram import Update
 from telegram.ext import ApplicationBuilder, CommandHandler, ContextTypes
 
@@ -64,9 +65,13 @@ async def ask(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
 # Main function to set up the bot
 def main():
     """Main function to initialize and run the Telegram bot."""
-    # Replace 'YOUR_TELEGRAM_BOT_TOKEN' with your bot's API token
-    bot_token = "YOUR_TELEGRAM_BOT_TOKEN"
-
+    # Get the bot token from environment variable
+    bot_token = os.environ.get("BOT_TOKEN")
+    
+    if not bot_token:
+        logger.error("BOT_TOKEN environment variable not set!")
+        return
+        
     # Create the application
     application = ApplicationBuilder().token(bot_token).build()
 
