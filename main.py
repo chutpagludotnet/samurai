@@ -38,7 +38,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     user_name = update.message.from_user.first_name
 
     welcome_message = (
-        f"👋 Hello {user_name}! I'm your multi-AI assistant powered by @medusaXD.\n\n"
+        f"👋 Hello {user_name}! I'm your multi-AI assistant powered by Provider 2.\n\n"
         f"Here are the commands you can use:\n\n"
         f"• Simply type your question to use the default model (GPT-4)\n"
         f"• /claude <question> - Ask Claude Sonnet 4\n"
@@ -120,33 +120,45 @@ async def ask_ai(update: Update, context: ContextTypes.DEFAULT_TYPE, model_id: s
         response.raise_for_status()
         response_data = response.json()
 
-        # Log the raw API response for debugging
-        logger.debug(f"API Response: {json.dumps(response_data, indent=2)}")
+        # Log the complete API response for debugging
+        logger.info(f"Complete API Response: {json.dumps(response_data)}")
 
         # Create a formatted response with the model name
-        header = f"🤖 **{model_name} Response:**\n\n"
+        header = f"🤖 **{model_name}:**\n\n"
 
-        # Process and send the response - FIXED to remove error prefix
+        # Process the response - NEW LOGIC TO HANDLE VARIOUS FORMATS
         if "response" in response_data:
             await update.message.reply_text(header + response_data["response"])
         elif "output" in response_data:
             await update.message.reply_text(header + response_data["output"])
-        elif "error" in response_data:
-            await update.message.reply_text(f"Error from {model_name}: {response_data['error']}")
+        elif "success" in response_data and response_data["success"] and "response" in response_data:
+            # Handle the specific format from your examples
+            await update.message.reply_text(header + response_data["response"])
+        elif "error" in response_data and response_data["error"]:
+            # This is a true error case
+            await update.message.reply_text(f"⚠️ Error from {model_name}: {response_data['error']}")
         else:
+            # If we can't find a standard response field, try to extract text from any field that might contain the response
+            for key, value in response_data.items():
+                if isinstance(value, str) and len(value) > 20:  # Likely a response if it's a longer string
+                    await update.message.reply_text(header + value)
+                    return
+
+            # If all else fails, send the raw data
             await update.message.reply_text(
-                f"Received an unexpected response format from {model_name}."
+                f"Received an unexpected response format from {model_name}. Here's the raw data:\n\n"
+                f"{json.dumps(response_data, indent=2)}"
             )
 
     except requests.exceptions.Timeout:
         logger.error(f"Request to {model_name} timed out.")
-        await update.message.reply_text(f"The request to {model_name} timed out. Please try again later.")
+        await update.message.reply_text(f"⏱️ The request to {model_name} timed out. Please try again later.")
     except requests.exceptions.RequestException as e:
         logger.error(f"API error with {model_name}: {e}")
-        await update.message.reply_text(f"Error with {model_name}: {str(e)}")
+        await update.message.reply_text(f"⚠️ Error with {model_name}: {str(e)}")
     except Exception as e:
         logger.error(f"Unexpected error with {model_name}: {e}")
-        await update.message.reply_text(f"An unexpected error occurred with {model_name}. Please try again.")
+        await update.message.reply_text(f"❌ An unexpected error occurred with {model_name}. Please try again.")
 
 # Model-specific command handlers
 async def claude_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
