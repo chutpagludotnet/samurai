@@ -38,7 +38,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     user_name = update.message.from_user.first_name
 
     welcome_message = (
-        f"👋 Hello {user_name}! I'm your multi-AI assistant powered by Provider 2.\n\n"
+        f"👋 Hello {user_name}! I'm your multi-AI assistant powered by @medusaXD.\n\n"
         f"Here are the commands you can use:\n\n"
         f"• Simply type your question to use the default model (GPT-4)\n"
         f"• /claude <question> - Ask Claude Sonnet 4\n"
@@ -95,6 +95,10 @@ async def ask_ai(update: Update, context: ContextTypes.DEFAULT_TYPE, model_id: s
     # Send typing indicator
     await update.message.chat.send_action(action="typing")
 
+    # Fix for the command attribute issue
+    if not hasattr(context, 'command'):
+        context.command = update.message.text.split()[0].lstrip('/')
+
     if not context.args:
         await update.message.reply_text(
             f"Please provide a question. Usage: /{context.command} <your question>"
@@ -126,15 +130,16 @@ async def ask_ai(update: Update, context: ContextTypes.DEFAULT_TYPE, model_id: s
         # Create a formatted response with the model name
         header = f"🤖 **{model_name}:**\n\n"
 
-        # Process the response - NEW LOGIC TO HANDLE VARIOUS FORMATS
-        if "response" in response_data:
+        # FIXED RESPONSE HANDLING: For this specific API that puts responses in the error field
+        # when success is false
+        if "success" in response_data and response_data["success"] is False and "error" in response_data:
+            # This is actually a successful response in the error field
+            await update.message.reply_text(header + response_data["error"])
+        elif "response" in response_data:
             await update.message.reply_text(header + response_data["response"])
         elif "output" in response_data:
             await update.message.reply_text(header + response_data["output"])
-        elif "success" in response_data and response_data["success"] and "response" in response_data:
-            # Handle the specific format from your examples
-            await update.message.reply_text(header + response_data["response"])
-        elif "error" in response_data and response_data["error"]:
+        elif "error" in response_data and response_data.get("success") is True:
             # This is a true error case
             await update.message.reply_text(f"⚠️ Error from {model_name}: {response_data['error']}")
         else:
@@ -163,30 +168,37 @@ async def ask_ai(update: Update, context: ContextTypes.DEFAULT_TYPE, model_id: s
 # Model-specific command handlers
 async def claude_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Handle /claude command to ask Claude Sonnet 4."""
+    context.command = "claude"
     await ask_ai(update, context, AI_MODELS["claude"]["id"], AI_MODELS["claude"]["name"])
 
 async def opus_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Handle /opus command to ask Claude Opus 4."""
+    context.command = "opus"
     await ask_ai(update, context, AI_MODELS["opus"]["id"], AI_MODELS["opus"]["name"])
 
 async def gpt4_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Handle /gpt4 command to ask GPT-4."""
+    context.command = "gpt4"
     await ask_ai(update, context, AI_MODELS["gpt4"]["id"], AI_MODELS["gpt4"]["name"])
 
 async def gpt45_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Handle /gpt45 command to ask GPT-4.5 Preview."""
+    context.command = "gpt45"
     await ask_ai(update, context, AI_MODELS["gpt45"]["id"], AI_MODELS["gpt45"]["name"])
 
 async def o1pro_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Handle /o1pro command to ask o1-pro."""
+    context.command = "o1pro"
     await ask_ai(update, context, AI_MODELS["o1pro"]["id"], AI_MODELS["o1pro"]["name"])
 
 async def gemini_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Handle /gemini command to ask Gemini Pro."""
+    context.command = "gemini"
     await ask_ai(update, context, AI_MODELS["gemini"]["id"], AI_MODELS["gemini"]["name"])
 
 async def gemini25_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Handle /gemini25 command to ask Gemini 2.5 Pro."""
+    context.command = "gemini25"
     await ask_ai(update, context, AI_MODELS["gemini25"]["id"], AI_MODELS["gemini25"]["name"])
 
 # Function to check API status
@@ -239,6 +251,13 @@ async def error_handler(update: object, context: ContextTypes.DEFAULT_TYPE) -> N
         logger.error("Polling conflict detected. This might indicate multiple bot instances running.")
     elif "NetworkError" in str(context.error):
         logger.error("Network error occurred. Will retry on next update.")
+    elif "AttributeError" in str(context.error) and "'CallbackContext' object has no attribute 'command'" in str(context.error):
+        # This is a specific error we're handling now
+        if update and hasattr(update, 'message'):
+            await update.message.reply_text(
+                "Please provide a question with your command. For example:\n"
+                f"/{update.message.text.split()[0][1:]} What is the capital of France?"
+            )
 
     # For serious errors, you might want to notify an admin
     admin_id = os.environ.get("ADMIN_CHAT_ID")
