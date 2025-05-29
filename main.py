@@ -219,7 +219,7 @@ async def status(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
 
         if response.status_code == 200:
             await update.message.reply_text(
-                f"✅ Provider 2 API is working properly!\n"
+                f"✅ @medusaXD API is working properly!\n"
                 f"Response time: {response_time:.2f} seconds\n"
                 f"Default model: GPT-4"
             )
